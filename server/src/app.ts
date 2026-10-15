@@ -16,6 +16,10 @@ export function createApp() {
   app.use(cors({ origin: config.corsOrigins }));
   app.use(express.json({ limit: '2mb' }));
 
+  app.get('/', (_req, res) => {
+    res.json({ name: 'StreakPot API', status: 'ok', health: '/api/health' });
+  });
+
   app.get('/api/health', async (_req, res) => {
     await pool.query('SELECT 1');
     res.json({ ok: true });
