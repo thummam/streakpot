@@ -2,7 +2,7 @@
 
 **Group habit challenges with stakes.** Start a challenge with friends ("gym 3× a week for 4 weeks"), check in with photo proof, and let your friends vote on whether it's legit. Miss your weekly target and you pay points into the pot. Everyone who never misses splits it at the end.
 
-**Live:** https://YOUR-APP.vercel.app  ·  **API:** https://YOUR-API.onrender.com/api/health
+**Live app:** https://streakpot.vercel.app  ·  **API health:** https://streakpot-api.onrender.com/api/health
 
 <!-- Add a screenshot or GIF here: docs/screenshot.png -->
 
