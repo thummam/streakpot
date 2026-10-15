@@ -1,0 +1,21 @@
+# Render Blueprint — deploys the API. (Front end goes on Vercel, database on Neon.)
+services:
+  - type: web
+    name: streakpot-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # paste your Neon connection string
+      - key: CORS_ORIGIN
+        sync: false # e.g. https://streakpot.vercel.app
