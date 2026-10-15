@@ -84,9 +84,48 @@ describe.skipIf(!dbUrl)('API', () => {
     const list = await request(app).get('/api/challenges').set('Authorization', `Bearer ${ana}`).expect(200);
     expect(list.body.challenges[0].me.thisWeek.approved).toBe(1);
 
+    // Started challenges lock membership: nobody can leave, and the owner can't wipe it while others are in.
     await request(app).delete(`/api/challenges/${id}`).set('Authorization', `Bearer ${ben}`).expect(404);
-    await request(app).delete(`/api/challenges/${id}/membership`).set('Authorization', `Bearer ${cy}`).expect(204);
-    await request(app).delete(`/api/challenges/${id}`).set('Authorization', `Bearer ${ana}`).expect(204);
+    await request(app).delete(`/api/challenges/${id}/membership`).set('Authorization', `Bearer ${cy}`).expect(400);
+    await request(app).delete(`/api/challenges/${id}`).set('Authorization', `Bearer ${ana}`).expect(400);
+    expect(state.body.canLeave).toBe(false);
+  });
+
+  it('closes joining a few days after the start and judges check-ins by who was there', async () => {
+    const owner = await signup('Owner');
+    const early = await signup('Early');
+    const late = await signup('Late');
+    const past = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+
+    // Create a challenge that started 5 days ago (bypassing the API's start-date check).
+    const { rows } = await pool.query(
+      `INSERT INTO challenges (title, target_per_week, stake, weeks, start_date, invite_code, owner_id)
+       VALUES ('Old one', 2, 10, 2, $1, 'OLDCODE1', (SELECT id FROM users WHERE email = 'owner@example.com')) RETURNING id`,
+      [past],
+    );
+    const id = rows[0].id;
+    await pool.query(
+      `INSERT INTO memberships (challenge_id, user_id, joined_on)
+       SELECT $1, id, $2 FROM users WHERE email IN ('owner@example.com', 'early@example.com')`,
+      [id, past],
+    );
+
+    const preview = await request(app).get('/api/invites/OLDCODE1').expect(200);
+    expect(preview.body.joinOpen).toBe(false);
+    await request(app).post('/api/invites/OLDCODE1/join').set('Authorization', `Bearer ${late}`).expect(400);
+
+    // Owner checks in; Early approves (1 of 1 other member), so it's approved.
+    const ci = await request(app).post(`/api/challenges/${id}/checkins`).set('Authorization', `Bearer ${owner}`).send({ day: today, note: 'done' }).expect(201);
+    await request(app).put(`/api/checkins/${ci.body.id}/vote`).set('Authorization', `Bearer ${early}`).send({ approve: true }).expect(204);
+
+    // Someone added after the check-in day must not flip it back to pending.
+    await pool.query(
+      `INSERT INTO memberships (challenge_id, user_id, joined_on)
+       SELECT $1, id, $2::date + 1 FROM users WHERE email = 'late@example.com'`,
+      [id, today],
+    );
+    const state = await request(app).get(`/api/challenges/${id}`).set('Authorization', `Bearer ${owner}`).expect(200);
+    expect(state.body.checkIns[0].status).toBe('approved');
   });
 
   it('validates input', async () => {

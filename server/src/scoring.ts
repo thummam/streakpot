@@ -10,13 +10,22 @@ import { addDays, diffDays } from './dates.js';
  *   if it is still undecided after REVIEW_WINDOW_HOURS.
  * - A week is settled SETTLE_GRACE_DAYS after it ends (so late reviews can land).
  *   Missing a settled week costs `stake` points, which go into the pot.
- * - Members who never miss a week split the pot equally.
- * - A member is only judged on weeks they joined by the third day of.
+ * - Joining closes JOIN_GRACE_DAYS after the start, and members can't leave once it
+ *   starts, so everyone is judged on the same weeks and losses can't be erased.
+ * - Members who never miss a week split the pot equally; any remainder from the
+ *   division goes one point each to the top-ranked survivors so no points vanish.
+ * - Each check-in is judged against the members who had joined by its day, so
+ *   later membership changes can't flip a decided check-in.
  */
 
 export const REVIEW_WINDOW_HOURS = 48;
 export const SETTLE_GRACE_DAYS = 2;
-const JOIN_GRACE_DAYS = 2;
+export const JOIN_GRACE_DAYS = 2;
+
+/** Last day anyone can join a challenge. */
+export function joinDeadline(startDate: string): string {
+  return addDays(startDate, JOIN_GRACE_DAYS);
+}
 
 export type CheckInStatus = 'pending' | 'approved' | 'rejected';
 
@@ -133,18 +142,26 @@ export function computeStandings({ challenge, members, checkIns, today }: Scorin
       lost: weeksMissed * stake,
       share: 0,
       points: 0,
-      alive: weeksMissed === 0,
+      // Must have been judged on at least one week to be eligible for the pot.
+      alive: weeksMissed === 0 && weekResults.some((w) => w.counted),
     };
   });
 
   const pot = standings.reduce((sum, s) => sum + s.lost, 0);
   const survivors = standings.filter((s) => s.alive).length;
   const share = survivors > 0 ? Math.floor(pot / survivors) : 0;
+  let remainder = survivors > 0 ? pot - share * survivors : 0;
 
-  for (const s of standings) {
-    s.share = s.alive ? share : 0;
-    s.points = s.share - s.lost;
+  // Hand out the remainder to the strongest survivors first, so the pot is fully paid out.
+  const survivorOrder = standings
+    .filter((s) => s.alive)
+    .sort((a, b) => b.weeksMet - a.weeksMet || b.totalApproved - a.totalApproved || a.userId - b.userId);
+  for (const s of standings) s.share = s.alive ? share : 0;
+  for (const s of survivorOrder) {
+    if (remainder-- <= 0) break;
+    s.share += 1;
   }
+  for (const s of standings) s.points = s.share - s.lost;
 
   standings.sort(
     (a, b) =>

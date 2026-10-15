@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { currentUser, optionalAuth, requireAuth } from '../auth.js';
-import { addDays, diffDays, toDay } from '../dates.js';
+import { toDay } from '../dates.js';
 import { query } from '../db.js';
 import { HttpError, notFound } from '../http.js';
+import { joinDeadline } from '../scoring.js';
 
 export const invitesRouter = Router();
 
@@ -37,14 +38,18 @@ invitesRouter.get('/:code', optionalAuth, async (req, res) => {
       memberCount: c.member_count,
     },
     alreadyMember,
+    joinDeadline: joinDeadline(c.start_date),
+    joinOpen: toDay(new Date()) <= joinDeadline(c.start_date),
   });
 });
 
 invitesRouter.post('/:code/join', requireAuth, async (req, res) => {
   const user = currentUser(req);
   const c = await findByCode(String(req.params.code));
-  const endDate = addDays(c.start_date, c.weeks * 7 - 1);
-  if (diffDays(toDay(new Date()), endDate) > 0) throw new HttpError(400, 'This challenge has already ended.');
+  // Late joiners could otherwise skip the work and still split the pot.
+  if (toDay(new Date()) > joinDeadline(c.start_date)) {
+    throw new HttpError(400, 'Joining for this challenge has closed.');
+  }
   await query(
     `INSERT INTO memberships (challenge_id, user_id, joined_on) VALUES ($1, $2, GREATEST($3::date, CURRENT_DATE))
      ON CONFLICT DO NOTHING`,

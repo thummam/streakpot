@@ -28,7 +28,7 @@ export function ChallengePage() {
   if (error) return <div className="card narrow"><p className="error">{error}</p><Link to="/">Back to dashboard</Link></div>;
   if (!data || !user) return <div className="center muted">Loading…</div>;
 
-  const { challenge: c, standings, checkIns, phase, pot, survivors, currentWeek, endDate } = data;
+  const { challenge: c, standings, checkIns, phase, pot, survivors, currentWeek, endDate, joinOpen, joinDeadline, canLeave, canDelete } = data;
   const me = standings.find((s) => s.userId === user.id);
   const isOwner = c.ownerId === user.id;
   const today = localToday();
@@ -85,7 +85,7 @@ export function ChallengePage() {
 
   return (
     <div className="challenge">
-      {params.get('created') && standings.length === 1 && (
+      {params.get('created') && standings.length === 1 && joinOpen && (
         <div className="card callout">
           <div>
             <h3>Challenge created 🎉</h3>
@@ -107,7 +107,14 @@ export function ChallengePage() {
             {c.targetPerWeek}× per week · {c.stake} pts per missed week · {formatDay(c.startDate)} – {formatDay(endDate)}
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={copyInvite}>{copied ? 'Copied!' : '🔗 Invite friends'}</button>
+        {joinOpen ? (
+          <span className="invite">
+            <button className="btn btn-ghost" onClick={copyInvite}>{copied ? 'Copied!' : '🔗 Invite friends'}</button>
+            <small className="muted">Joining closes {formatDay(joinDeadline)}</small>
+          </span>
+        ) : (
+          <span className="muted small">Joining closed</span>
+        )}
       </section>
 
       <section className="stats">
@@ -194,11 +201,13 @@ export function ChallengePage() {
         )}
       </section>
 
-      <footer className="danger">
-        <button className="link danger-link" onClick={deleteOrLeave}>
-          {isOwner ? 'Delete challenge' : 'Leave challenge'}
-        </button>
-      </footer>
+      {(canLeave || canDelete) && (
+        <footer className="danger">
+          <button className="link danger-link" onClick={deleteOrLeave}>
+            {isOwner ? 'Delete challenge' : 'Leave challenge'}
+          </button>
+        </footer>
+      )}
     </div>
   );
 }

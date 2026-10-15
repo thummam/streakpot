@@ -4,7 +4,7 @@
 
 **Live app:** https://streakpot.vercel.app  ·  **API health:** https://streakpot-api.onrender.com/api/health
 
-<!-- Add a screenshot or GIF here: docs/screenshot.png -->
+![alt text](image.png)
 
 ## Features
 
@@ -33,7 +33,8 @@ React SPA (Vercel) ──HTTPS/JSON + Bearer JWT──▶ Express API (Render) �
 ```
 
 - **Standings are derived data, not stored state.** Check-in status, weekly results, streaks, and the pot are all computed by one pure function ([`server/src/scoring.ts`](server/src/scoring.ts)) from the raw rows: check-ins, votes, and memberships. There is no cron job that can fail halfway, and no counter that can drift out of sync. Because the function is pure, it's easy to unit-test exhaustively.
-- **Fair settlement:** a week only "settles" 2 days after it ends, so late votes can still land. People who join mid-challenge aren't penalised for weeks they weren't in.
+- **Fair settlement:** a week only "settles" 2 days after it ends, so late votes can still land.
+- **Gaming-resistant rules:** joining closes 2 days after the start, and nobody can leave once it begins. So nobody can join at the end to grab a share, or quit to erase their losses. Each check-in is judged against the members present on its day, so later changes can't flip it. Pot remainders go to the top survivors, so points are always conserved (the tests check this).
 - **Time zones:** calendar days are stored as `DATE` and handled as `YYYY-MM-DD` strings end to end. The API accepts check-ins for the server date ±1 day, so every time zone can log "today."
 - **Authorization at the query level:** every challenge or check-in query joins on `memberships` for the current user, so a non-member gets a 404 and can't tell whether the resource exists.
 - **Photos live in Postgres (`BYTEA`):** they're downscaled to ≤1080px JPEG in the browser first, typically 100–200 KB. This keeps the stack to a single managed service. Moving them to S3/R2 is the next step at scale.

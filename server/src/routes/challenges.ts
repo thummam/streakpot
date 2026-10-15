@@ -6,7 +6,7 @@ import { challengeJson, loadChallengeState, type ChallengeRow } from '../challen
 import { addDays, diffDays, isValidDay, toDay } from '../dates.js';
 import { query, withTransaction } from '../db.js';
 import { HttpError, idParam, notFound, parse } from '../http.js';
-import { SETTLE_GRACE_DAYS } from '../scoring.js';
+import { joinDeadline, SETTLE_GRACE_DAYS } from '../scoring.js';
 
 export const challengesRouter = Router();
 challengesRouter.use(requireAuth);
@@ -91,12 +91,18 @@ challengesRouter.post('/', async (req, res) => {
 
 challengesRouter.get('/:id', async (req, res) => {
   const user = currentUser(req);
-  const { challenge, checkIns, scoring } = await loadChallengeState(idParam(req), user.id);
+  const { challenge, members, checkIns, scoring } = await loadChallengeState(idParam(req), user.id);
+  const today = toDay(new Date());
+  const isOwner = challenge.owner_id === user.id;
   res.json({
     challenge: challengeJson(challenge),
     ...scoring,
     checkIns,
-    today: toDay(new Date()),
+    today,
+    joinDeadline: joinDeadline(challenge.start_date),
+    joinOpen: today <= joinDeadline(challenge.start_date),
+    canLeave: !isOwner && scoring.phase === 'upcoming',
+    canDelete: isOwner && deletable(scoring.phase, members.length),
   });
 });
 
@@ -112,20 +118,31 @@ challengesRouter.patch('/:id', async (req, res) => {
   res.json({ challenge: challengeJson(row) });
 });
 
+/** Deleting a running challenge would wipe everyone's results, so only allow it when nobody else is affected. */
+function deletable(phase: string, memberCount: number): boolean {
+  return phase === 'upcoming' || phase === 'finished' || memberCount <= 1;
+}
+
 challengesRouter.delete('/:id', async (req, res) => {
   const user = currentUser(req);
-  const rows = await query('DELETE FROM challenges WHERE id = $1 AND owner_id = $2 RETURNING id', [idParam(req), user.id]);
-  if (!rows[0]) throw notFound('Challenge not found.');
+  const { challenge, members, scoring } = await loadChallengeState(idParam(req), user.id);
+  if (challenge.owner_id !== user.id) throw notFound('Challenge not found.');
+  if (!deletable(scoring.phase, members.length)) {
+    throw new HttpError(400, "You can't delete a challenge while it's running with other members.");
+  }
+  await query('DELETE FROM challenges WHERE id = $1', [challenge.id]);
   res.status(204).end();
 });
 
 challengesRouter.delete('/:id/membership', async (req, res) => {
   const user = currentUser(req);
-  const id = idParam(req);
-  const [c] = await query<ChallengeRow>('SELECT owner_id FROM challenges WHERE id = $1', [id]);
-  if (c?.owner_id === user.id) throw new HttpError(400, 'The creator cannot leave. Delete the challenge instead.');
-  const rows = await query('DELETE FROM memberships WHERE challenge_id = $1 AND user_id = $2 RETURNING user_id', [id, user.id]);
-  if (!rows[0]) throw notFound('Challenge not found.');
+  const { challenge } = await loadChallengeState(idParam(req), user.id);
+  if (challenge.owner_id === user.id) throw new HttpError(400, 'The creator cannot leave. Delete the challenge instead.');
+  // Leaving after the start would erase your missed weeks from the pot.
+  if (toDay(new Date()) >= challenge.start_date) {
+    throw new HttpError(400, "You can't leave once the challenge has started.");
+  }
+  await query('DELETE FROM memberships WHERE challenge_id = $1 AND user_id = $2', [challenge.id, user.id]);
   res.status(204).end();
 });
 

@@ -142,11 +142,17 @@ export interface ChallengeDetail {
   standings: Standing[];
   checkIns: CheckIn[];
   today: string;
+  joinDeadline: string;
+  joinOpen: boolean;
+  canLeave: boolean;
+  canDelete: boolean;
 }
 
 export interface InvitePreview {
   challenge: Omit<Challenge, 'inviteCode' | 'ownerId'> & { ownerName: string; memberCount: number };
   alreadyMember: boolean;
+  joinDeadline: string;
+  joinOpen: boolean;
 }
 
 type AuthResponse = { token: string; user: User };

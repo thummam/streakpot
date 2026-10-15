@@ -73,4 +73,29 @@ describe('computeStandings', () => {
     expect(result.standings[0].weeksMissed).toBe(0);
     expect(result.standings[0].alive).toBe(true);
   });
+
+  it('splits an uneven pot without losing points', () => {
+    const four = [...members, { userId: 4, name: 'Dee', joinedOn: '2026-03-01' }];
+    const survive = (id: number) => [ok(id, '2026-03-02'), ok(id, '2026-03-03'), ok(id, '2026-03-09'), ok(id, '2026-03-10')];
+    const result = computeStandings({
+      challenge,
+      members: four,
+      checkIns: [...survive(1), ok(1, '2026-03-11'), ...survive(2), ...survive(3)], // Dee misses both weeks: pot 20, 3 survivors
+      today: '2026-03-20',
+    });
+    expect(result.pot).toBe(20);
+    expect(result.standings.find((s) => s.name === 'Ana')!.share).toBe(7); // top survivor gets the remainder
+    expect(result.standings.filter((s) => s.alive).reduce((sum, s) => sum + s.share, 0)).toBe(20);
+    expect(result.standings.reduce((sum, s) => sum + s.points, 0)).toBe(0); // points are conserved
+  });
+
+  it('does not let someone who was never judged on a week win a share', () => {
+    const result = computeStandings({
+      challenge,
+      members: [...members, { userId: 9, name: 'Zed', joinedOn: '2026-03-20' }],
+      checkIns: [],
+      today: '2026-03-20',
+    });
+    expect(result.standings.find((s) => s.name === 'Zed')!.alive).toBe(false);
+  });
 });

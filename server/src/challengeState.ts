@@ -76,7 +76,6 @@ export async function loadChallengeState(challengeId: number, viewerId: number, 
     [challengeId, viewerId],
   );
 
-  const otherMembers = Math.max(members.length - 1, 0);
   const checkIns: CheckInView[] = rows.map((r) => {
     const approvals = Number(r.approvals);
     const rejections = Number(r.rejections);
@@ -91,7 +90,14 @@ export async function loadChallengeState(challengeId: number, viewerId: number, 
       approvals,
       rejections,
       myVote: r.my_vote,
-      status: checkInStatus({ approvals, rejections, otherMembers, createdAt: r.created_at, now }),
+      // Judge against the members who had joined by the check-in's day.
+      status: checkInStatus({
+        approvals,
+        rejections,
+        otherMembers: members.filter((m) => m.user_id !== r.user_id && m.joined_on <= r.day).length,
+        createdAt: r.created_at,
+        now,
+      }),
     };
   });
 

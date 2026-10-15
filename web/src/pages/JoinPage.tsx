@@ -42,9 +42,15 @@ export function JoinPage() {
         <li><b>{c.weeks}</b> {c.weeks === 1 ? 'week' : 'weeks'}, starting {formatDay(c.startDate, { month: 'long', day: 'numeric' })}</li>
         <li><b>{c.stake}</b> points into the pot for each missed week</li>
         <li><b>{c.memberCount}</b> {c.memberCount === 1 ? 'person has' : 'people have'} joined</li>
+        {invite.joinOpen && <li>Join by <b>{formatDay(invite.joinDeadline, { month: 'long', day: 'numeric' })}</b></li>}
       </ul>
       {invite.alreadyMember ? (
         <Link className="btn" to={`/c/${c.id}`}>You're in, open challenge</Link>
+      ) : !invite.joinOpen ? (
+        <p className="closed">
+          Joining closed on {formatDay(invite.joinDeadline, { month: 'long', day: 'numeric' })}. Everyone has to start
+          together so nobody can skip the work and still split the pot. Ask {c.ownerName} to start a new round.
+        </p>
       ) : user ? (
         <button className="btn btn-big" onClick={join} disabled={busy}>
           {busy ? 'Joining…' : "I'm in"}
